@@ -4,13 +4,90 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Control Flow Graph Generator</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        :root {
+            --primary: #3498db;
+            --secondary: #2c3e50;
+            --background: #ecf0f1;
+            --text: #34495e;
+            --border: #bdc3c7;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background-color: var(--background);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: var(--secondary);
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--secondary);
+        }
+        textarea, input[type="submit"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        input[type="submit"] {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        input[type="submit"]:hover {
+            background-color: #2980b9;
+        }
+        #result {
+            margin-top: 20px;
+        }
+        #cfg-image {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+        }
+        #dot-code {
+            background-color: #f9f9f9;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 10px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        #metrics {
+            background-color: #f9f9f9;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>Control Flow Graph Generator</h1>
         
-        <form action="{{ url_for('generate_cfg_route') }}" method="post">
+        <form id="cfg-form">
             <label for="user_input">Scenario:</label>
             <textarea id="user_input" name="user_input" rows="4" required></textarea>
             
@@ -20,60 +97,53 @@
             <input type="submit" value="Generate CFG">
         </form>
 
-        {% if cfg_image %}
+        <div id="result" style="display: none;">
             <h2>Generated Control Flow Graph</h2>
-            <img src="data:image/png;base64,{{ cfg_image }}" alt="Control Flow Graph" class="cfg-image">
+            <img id="cfg-image" alt="Control Flow Graph">
             
-            <div class="metrics">
-                <h3>Metrics:</h3>
-                <ul>
-                    {% for key, value in metrics.items() %}
-                        <li><strong>{{ key }}:</strong> {{ value }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-        {% endif %}
-
-        <h2>History</h2>
-        {% for item in history %}
-            <div class="history-item">
-                <h3>Attempt {{ loop.index }}</h3>
-                <p><strong>Input:</strong> {{ item.input }}</p>
-                <p><strong>Feedback:</strong> {{ item.feedback or 'None' }}</p>
-                <img src="data:image/png;base64,{{ item.image }}" alt="Control Flow Graph" class="cfg-image">
-                <div class="metrics">
-                    <h4>Metrics:</h4>
-                    <ul>
-                        {% for key, value in item.metrics.items() %}
-                            <li><strong>{{ key }}:</strong> {{ value }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
-        {% endfor %}
-
-        <button onclick="clearHistory()" class="clear-history">Clear History</button>
+            <h3>DOT Syntax</h3>
+            <pre id="dot-code"></pre>
+            
+            <h3>Metrics</h3>
+            <div id="metrics"></div>
+        </div>
     </div>
 
     <script>
-    function clearHistory() {
-        fetch('/clear_history', { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.message);
-                location.reload();
-            });
-    }
+        document.getElementById('cfg-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userInput = document.getElementById('user_input').value;
+            const feedback = document.getElementById('feedback').value;
 
-    window.onload = function() {
-        var styles = window.getComputedStyle(document.body);
-        var bgColor = styles.getPropertyValue('background-color');
-        if (bgColor === 'rgb(240, 240, 240)') {
-            console.log('CSS loaded successfully');
-        } else {
-            console.error('CSS not loaded. Background color:', bgColor);
-        }
-    }
+            try {
+                const response = await fetch('/.netlify/functions/generate_cfg', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ user_input: userInput, feedback: feedback }),
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    document.getElementById('cfg-image').src = `data:image/png;base64,${data.cfg_image}`;
+                    document.getElementById('dot-code').textContent = data.dot_code;
+                    
+                    const metricsHtml = Object.entries(data.metrics)
+                        .map(([key, value]) => `<p><strong>${key}:</strong> ${value}</p>`)
+                        .join('');
+                    document.getElementById('metrics').innerHTML = metricsHtml;
+                    
+                    document.getElementById('result').style.display = 'block';
+                }
+            } catch (error) {
+                alert('An error occurred. Please try again.');
+                console.error('Error:', error);
+            }
+        });
     </script>
 </body>
 </html>
