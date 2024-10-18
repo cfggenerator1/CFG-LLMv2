@@ -1,0 +1,7 @@
+Flask
+openai>=1.0.0
+networkx
+pydot
+python-dotenv
+gunicorn
+graphviz
