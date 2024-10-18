@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Flow Graph Generator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Control Flow Graph Generator</h1>
+        
+        <form action="{{ url_for('generate_cfg_route') }}" method="post">
+            <label for="user_input">Scenario:</label>
+            <textarea id="user_input" name="user_input" rows="4" required></textarea>
+            
+            <label for="feedback">Feedback (optional):</label>
+            <textarea id="feedback" name="feedback" rows="2"></textarea>
+            
+            <input type="submit" value="Generate CFG">
+        </form>
+
+        {% if cfg_image %}
+            <h2>Generated Control Flow Graph</h2>
+            <img src="data:image/png;base64,{{ cfg_image }}" alt="Control Flow Graph" class="cfg-image">
+            
+            <div class="metrics">
+                <h3>Metrics:</h3>
+                <ul>
+                    {% for key, value in metrics.items() %}
+                        <li><strong>{{ key }}:</strong> {{ value }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <h2>History</h2>
+        {% for item in history %}
+            <div class="history-item">
+                <h3>Attempt {{ loop.index }}</h3>
+                <p><strong>Input:</strong> {{ item.input }}</p>
+                <p><strong>Feedback:</strong> {{ item.feedback or 'None' }}</p>
+                <img src="data:image/png;base64,{{ item.image }}" alt="Control Flow Graph" class="cfg-image">
+                <div class="metrics">
+                    <h4>Metrics:</h4>
+                    <ul>
+                        {% for key, value in item.metrics.items() %}
+                            <li><strong>{{ key }}:</strong> {{ value }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        {% endfor %}
+
+        <button onclick="clearHistory()" class="clear-history">Clear History</button>
+    </div>
+
+    <script>
+    function clearHistory() {
+        fetch('/clear_history', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                location.reload();
+            });
+    }
+
+    window.onload = function() {
+        var styles = window.getComputedStyle(document.body);
+        var bgColor = styles.getPropertyValue('background-color');
+        if (bgColor === 'rgb(240, 240, 240)') {
+            console.log('CSS loaded successfully');
+        } else {
+            console.error('CSS not loaded. Background color:', bgColor);
+        }
+    }
+    </script>
+</body>
+</html>
