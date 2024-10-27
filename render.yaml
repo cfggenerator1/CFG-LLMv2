@@ -5,14 +5,8 @@ services:
     buildCommand: |
       sudo apt-get update -y &&
       sudo apt-get install -y graphviz graphviz-dev &&
-      ls -la /usr/bin/dot &&  # Verify dot location
-      dot -V &&               # Verify dot works
       pip install -r requirements.txt
-    startCommand: |
-      echo "Dot version:" &&
-      dot -V &&
-      echo "PATH=$PATH" &&
-      gunicorn app:app
+    startCommand: gunicorn app:app
     envVars:
       - key: PATH
         value: /usr/bin:/usr/local/bin:/bin:/opt/render/project/.apt/usr/bin
