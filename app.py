@@ -17,6 +17,23 @@ app = Flask(__name__,
     template_folder='templates'
 )
 
+# Constants
+WELCOME_MESSAGE = """• Welcome to the Control Flow Graph Generator!
+
+• Key Features:
+  - Create detailed flow diagrams
+  - Get instant graph metrics
+  - Optimize process layouts
+  - Analyze flow complexity
+
+• How to Use:
+  - Type your process description
+  - Click Generate to create graph
+  - Use Refine for improvements
+
+• Try describing a simple process to start!"""
+
+# Flask configuration
 app.secret_key = os.getenv("SECRET_KEY", "fallback_secret_key")
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 app.config['SESSION_PERMANENT'] = False
@@ -39,43 +56,9 @@ file_handler.setFormatter(logging.Formatter(
 app.logger.addHandler(file_handler)
 app.logger.setLevel(logging.INFO)
 
-# Print current environment for debugging
-app.logger.info(f"Current PATH: {os.environ.get('PATH', 'Not set')}")
-app.logger.info(f"Current working directory: {os.getcwd()}")
-
-def verify_graphviz_installation():
-    """Verify Graphviz installation and log system information"""
-    try:
-        # Log all directories in PATH
-        path_dirs = os.environ.get('PATH', '').split(':')
-        app.logger.info("Searching in PATH directories:")
-        for directory in path_dirs:
-            app.logger.info(f"- {directory}")
-            if os.path.exists(directory):
-                files = os.listdir(directory)
-                app.logger.info(f"  Contents: {files}")
-
-        # Try to find dot using which
-        try:
-            dot_path = subprocess.check_output(['which', 'dot'], text=True).strip()
-            app.logger.info(f"dot found at: {dot_path}")
-        except subprocess.SubprocessError:
-            app.logger.info("which dot command failed")
-
-        # Check if Graphviz is accessible
-        result = subprocess.run(['dot', '-V'], capture_output=True, text=True)
-        app.logger.info(f"Graphviz version: {result.stdout}")
-        return True
-    except Exception as e:
-        app.logger.error(f"Graphviz verification failed: {str(e)}")
-        return False
-
 def find_dot_executable():
     """Find the dot executable using multiple methods"""
     app.logger.info("Starting dot executable search")
-    
-    # First, verify Graphviz installation
-    verify_graphviz_installation()
     
     # Method 1: Use shutil.which
     dot_path = shutil.which('dot')
@@ -88,36 +71,85 @@ def find_dot_executable():
         '/usr/bin/dot',
         '/usr/local/bin/dot',
         '/bin/dot',
-        '/opt/render/project/src/.apt/usr/bin/dot',  # Render-specific path
-        os.path.join(os.getcwd(), '.apt/usr/bin/dot'),  # Alternative Render path
+        '/opt/render/project/src/.apt/usr/bin/dot',
+        os.path.join(os.getcwd(), '.apt/usr/bin/dot'),
         'dot'
     ]
     
     for path in common_paths:
-        app.logger.info(f"Checking path: {path}")
         if os.path.isfile(path):
-            app.logger.info(f"Found dot at: {path}")
             try:
                 subprocess.run([path, '-V'], capture_output=True, check=True)
-                app.logger.info(f"Verified working dot at: {path}")
+                app.logger.info(f"Found working dot at: {path}")
                 return path
             except Exception as e:
                 app.logger.error(f"Path {path} exists but execution failed: {str(e)}")
-
-    # Method 3: Search in current directory and its parents
-    current_dir = os.getcwd()
-    while current_dir != '/':
-        dot_path = os.path.join(current_dir, '.apt/usr/bin/dot')
-        if os.path.isfile(dot_path):
-            app.logger.info(f"Found dot in parent directory: {dot_path}")
-            return dot_path
-        current_dir = os.path.dirname(current_dir)
+                continue
 
     app.logger.error("Could not find dot executable")
-    return 'dot'  # Return default as fallback
+    return 'dot'
+
+def extract_dot_code(response_text):
+    """Extract and validate DOT code from response"""
+    try:
+        if "digraph" not in response_text:
+            return None
+            
+        start_idx = response_text.index("digraph")
+        content = response_text[start_idx:]
+        
+        brace_count = 0
+        end_idx = -1
+        
+        for i, char in enumerate(content):
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_idx = i + 1
+                    break
+        
+        if end_idx == -1:
+            return None
+            
+        dot_code = content[:end_idx].strip()
+        return validate_dot_code(dot_code)
+        
+    except Exception as e:
+        app.logger.error(f"DOT code extraction error: {str(e)}")
+        return None
+
+def validate_dot_code(dot_code):
+    """Validate and fix common DOT code issues"""
+    if not dot_code:
+        return None
+        
+    try:
+        # Remove any invalid characters
+        dot_code = ''.join(char for char in dot_code if char.isprintable())
+        
+        # Ensure proper digraph structure
+        if 'digraph' not in dot_code:
+            dot_code = f'digraph G {{\n{dot_code}\n}}'
+        
+        # Fix common syntax issues
+        dot_code = dot_code.replace('|', '"')
+        dot_code = dot_code.replace('""', '"')
+        dot_code = dot_code.replace('};};', '};')
+        
+        # Validate with pydot
+        test_graph = pydot.graph_from_dot_data(dot_code)
+        if not test_graph:
+            return None
+            
+        return dot_code
+    except Exception as e:
+        app.logger.error(f"DOT code validation error: {str(e)}")
+        return None
 
 def generate_graph_image(dot_code):
-    """Generate graph image with Render-specific handling"""
+    """Generate graph image with improved error handling"""
     try:
         app.logger.info("Starting graph generation")
         
@@ -125,13 +157,9 @@ def generate_graph_image(dot_code):
         dot_path = find_dot_executable()
         app.logger.info(f"Using dot path: {dot_path}")
         
-        # Update environment PATH
-        bin_dir = os.path.dirname(dot_path)
-        os.environ["PATH"] = f"{bin_dir}:{os.environ.get('PATH', '')}"
-        
-        # Try direct subprocess approach first
+        # Try subprocess approach first
         try:
-            app.logger.info("Attempting direct subprocess approach")
+            app.logger.info("Attempting subprocess approach")
             process = subprocess.Popen(
                 [dot_path, '-Tpng'],
                 stdin=subprocess.PIPE,
@@ -140,31 +168,17 @@ def generate_graph_image(dot_code):
             )
             png_string, stderr = process.communicate(input=dot_code.encode())
             if png_string:
-                app.logger.info("Successfully generated PNG using subprocess")
                 return base64.b64encode(png_string).decode('utf-8')
-            else:
-                app.logger.error(f"Subprocess PNG generation failed: {stderr.decode()}")
         except Exception as e:
             app.logger.error(f"Subprocess approach failed: {str(e)}")
         
         # Fallback to pydot approach
         try:
-            app.logger.info("Attempting pydot approach")
             pydot.dot_path = dot_path
             graph = pydot.graph_from_dot_data(dot_code)[0]
-            
-            # Set graph attributes
-            graph.set_rankdir('TB')
-            graph.set_splines('ortho')
-            
-            # Generate PNG
             png_string = graph.create_png()
             if png_string:
-                app.logger.info("Successfully generated PNG using pydot")
                 return base64.b64encode(png_string).decode('utf-8')
-            else:
-                app.logger.error("Pydot generated empty PNG")
-                
         except Exception as e:
             app.logger.error(f"Pydot approach failed: {str(e)}")
         
@@ -172,8 +186,8 @@ def generate_graph_image(dot_code):
             
     except Exception as e:
         app.logger.error(f"Graph image generation error: {str(e)}")
-        app.logger.exception("Full traceback:")
         return None
+
 def calculate_metrics(dot_code):
     """Calculate graph metrics from DOT code"""
     try:
@@ -208,7 +222,6 @@ def format_response(explanation):
     
     response_parts = []
     for line in lines:
-        # Remove "Complete DOT Graph Code" and dot code blocks
         if "Complete DOT Graph Code" in line or "```dot" in line or "```" in line:
             continue
         elif line.startswith('•'):
@@ -219,6 +232,7 @@ def format_response(explanation):
             response_parts.append(f"• {line}")
     
     return '\n'.join(response_parts)
+
 @app.route('/')
 def index():
     if 'chat_history' not in session:
@@ -250,7 +264,6 @@ def generate_cfg_route():
 
         messages = [{"role": "system", "content": system_message}]
         
-        # Add context from recent chat history
         for chat in chat_history[-5:]:
             messages.append({
                 "role": "user" if chat['type'] == 'user' else "assistant",
@@ -284,7 +297,6 @@ def generate_cfg_route():
                 "chat_history": chat_history
             }), 200
             
-        # Generate graph image
         encoded_image = generate_graph_image(dot_code)
         if not encoded_image:
             return jsonify({
@@ -292,12 +304,10 @@ def generate_cfg_route():
                 "chat_history": chat_history
             }), 200
             
-        # Calculate metrics
         metrics = calculate_metrics(dot_code)
         if not metrics:
             metrics = {"nodes": 0, "edges": 0, "cyclomatic": 0}
             
-        # Update chat history
         explanation = assistant_response[:assistant_response.index("digraph")].strip()
         formatted_response = format_response(explanation)
         
@@ -326,6 +336,28 @@ def clear_session():
         "content": WELCOME_MESSAGE
     }]
     return jsonify({"status": "success"})
+
+@app.route('/verify-graphviz', methods=['GET'])
+def verify_graphviz():
+    """Endpoint to verify Graphviz installation"""
+    try:
+        dot_path = find_dot_executable()
+        result = {
+            'dot_path': dot_path,
+            'path_env': os.environ.get('PATH', 'Not set'),
+            'cwd': os.getcwd(),
+            'dot_exists': os.path.exists(dot_path) if dot_path != 'dot' else None
+        }
+        
+        try:
+            version = subprocess.check_output([dot_path, '-V'], stderr=subprocess.STDOUT, text=True)
+            result['version'] = version
+        except Exception as e:
+            result['version_error'] = str(e)
+            
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5002))
