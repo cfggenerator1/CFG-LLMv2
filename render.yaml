@@ -3,7 +3,12 @@ services:
     name: cfg-generator
     env: python
     buildCommand: |
-      apt-get update -y && 
-      apt-get install -y graphviz graphviz-dev &&
+      sudo apt-get update -y &&
+      sudo apt-get install -y graphviz graphviz-dev &&
+      which dot &&
+      dot -V &&
       pip install -r requirements.txt
     startCommand: gunicorn app:app
+    envVars:
+      - key: PATH
+        value: /usr/local/bin:/usr/bin:/bin
