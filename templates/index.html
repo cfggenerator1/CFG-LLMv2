@@ -4,146 +4,174 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Control Flow Graph Generator</title>
-    <style>
-        :root {
-            --primary: #3498db;
-            --secondary: #2c3e50;
-            --background: #ecf0f1;
-            --text: #34495e;
-            --border: #bdc3c7;
-        }
-        body {
-            font-family: 'Arial', sans-serif;
-            line-height: 1.6;
-            color: var(--text);
-            background-color: var(--background);
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        h1, h2 {
-            color: var(--secondary);
-        }
-        form {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            color: var(--secondary);
-        }
-        textarea, input[type="submit"] {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        input[type="submit"] {
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-        input[type="submit"]:hover {
-            background-color: #2980b9;
-        }
-        #result {
-            margin-top: 20px;
-        }
-        #cfg-image {
-            max-width: 100%;
-            height: auto;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-        }
-        #dot-code {
-            background-color: #f9f9f9;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 10px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        #metrics {
-            background-color: #f9f9f9;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 10px;
-            margin-top: 10px;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
-    <div class="container">
+    <header class="header">
         <h1>Control Flow Graph Generator</h1>
-        
-        <form id="cfg-form">
-            <label for="user_input">Scenario:</label>
-            <textarea id="user_input" name="user_input" rows="4" required></textarea>
-            
-            <label for="feedback">Feedback (optional):</label>
-            <textarea id="feedback" name="feedback" rows="2"></textarea>
-            
-            <input type="submit" value="Generate CFG">
-        </form>
+        <p>Generate and modify control flow graphs with ease</p>
+    </header>
 
-        <div id="result" style="display: none;">
-            <h2>Generated Control Flow Graph</h2>
-            <img id="cfg-image" alt="Control Flow Graph">
-            
-            <h3>DOT Syntax</h3>
-            <pre id="dot-code"></pre>
-            
-            <h3>Metrics</h3>
-            <div id="metrics"></div>
+    <div class="container">
+        <!-- Input Section -->
+        <div class="card">
+            <form id="inputForm" class="input-container">
+                <textarea 
+                    id="userInput" 
+                    placeholder="Describe the control flow you want to generate..."
+                    required
+                ></textarea>
+                <div class="button-group">
+                    <button type="submit" class="button button-primary">
+                        Generate Graph
+                    </button>
+                    <button type="button" class="button button-secondary" onclick="clearHistory()">
+                        Clear History
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <p>Generating graph...</p>
+        </div>
+
+        <!-- Graph Output Section -->
+        <div class="card">
+            <div class="graph-container">
+                <div id="graphOutput"></div>
+                
+                <!-- Metrics Section -->
+                <div id="metricsOutput" class="metrics-container">
+                    <h3>Graph Metrics</h3>
+                    <div class="metrics-grid">
+                        <!-- Metrics will be inserted here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Feedback Section -->
+            <div id="feedbackContainer" class="feedback-container" style="display: none;">
+                <h3>Provide Feedback for Graph Repair</h3>
+                <div class="input-container">
+                    <textarea 
+                        id="feedbackInput" 
+                        placeholder="Describe what needs to be fixed or improved..."
+                    ></textarea>
+                </div>
+                <button onclick="submitFeedback()" class="button button-primary">
+                    Submit Feedback
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat History Section -->
+        <div class="card">
+            <h3>Chat History</h3>
+            <div id="chatHistory" class="chat-history">
+                <!-- Chat messages will be inserted here -->
+            </div>
         </div>
     </div>
 
     <script>
-        document.getElementById('cfg-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const userInput = document.getElementById('user_input').value;
-            const feedback = document.getElementById('feedback').value;
-
-            try {
-                const response = await fetch('/.netlify/functions/generate_cfg', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ user_input: userInput, feedback: feedback }),
-                });
-
-                const data = await response.json();
-
-                if (data.error) {
-                    alert(data.error);
-                } else {
-                    document.getElementById('cfg-image').src = `data:image/png;base64,${data.cfg_image}`;
-                    document.getElementById('dot-code').textContent = data.dot_code;
-                    
-                    const metricsHtml = Object.entries(data.metrics)
-                        .map(([key, value]) => `<p><strong>${key}:</strong> ${value}</p>`)
-                        .join('');
-                    document.getElementById('metrics').innerHTML = metricsHtml;
-                    
-                    document.getElementById('result').style.display = 'block';
-                }
-            } catch (error) {
-                alert('An error occurred. Please try again.');
-                console.error('Error:', error);
+        function updateUI(data) {
+            // Hide loading indicator
+            $('#loading').hide();
+            
+            // Update graph image
+            if (data.cfg_image) {
+                $('#graphOutput').html(`<img src="data:image/png;base64,${data.cfg_image}" alt="Control Flow Graph">`);
+                $('#feedbackContainer').show();
             }
+            
+            // Update metrics
+            if (data.metrics) {
+                let metricsHtml = '<div class="metrics-grid">';
+                for (const [key, value] of Object.entries(data.metrics)) {
+                    metricsHtml += `
+                        <div class="metric-item">
+                            <div class="metric-value">${value}</div>
+                            <div class="metric-label">${key}</div>
+                        </div>`;
+                }
+                metricsHtml += '</div>';
+                $('#metricsOutput').html(`<h3>Graph Metrics</h3>${metricsHtml}`);
+            }
+            
+            // Update chat history
+            if (data.chat_history) {
+                let chatHtml = '';
+                data.chat_history.forEach(chat => {
+                    const messageClass = chat.type === 'user' ? 'user-message' : 'assistant-message';
+                    chatHtml += `
+                        <div class="chat-message ${messageClass}">
+                            <strong>${chat.type}:</strong> ${chat.content}
+                        </div>`;
+                });
+                $('#chatHistory').html(chatHtml);
+            }
+        }
+
+        $('#inputForm').submit(function(e) {
+            e.preventDefault();
+            const userInput = $('#userInput').val();
+            
+            // Show loading indicator
+            $('#loading').show();
+            
+            $.ajax({
+                url: '/generate',
+                method: 'POST',
+                data: { user_input: userInput },
+                success: function(data) {
+                    updateUI(data);
+                    $('#userInput').val('');
+                },
+                error: function(xhr, status, error) {
+                    $('#loading').hide();
+                    alert('Error: ' + error);
+                }
+            });
         });
+
+        function submitFeedback() {
+            const feedback = $('#feedbackInput').val();
+            
+            // Show loading indicator
+            $('#loading').show();
+            
+            $.ajax({
+                url: '/repair',
+                method: 'POST',
+                data: { feedback: feedback },
+                success: function(data) {
+                    updateUI(data);
+                    $('#feedbackInput').val('');
+                },
+                error: function(xhr, status, error) {
+                    $('#loading').hide();
+                    alert('Error: ' + error);
+                }
+            });
+        }
+
+        function clearHistory() {
+            $.ajax({
+                url: '/clear',
+                method: 'POST',
+                success: function() {
+                    location.reload();
+                },
+                error: function(xhr, status, error) {
+                    alert('Error: ' + error);
+                }
+            });
+        }
     </script>
 </body>
 </html>
