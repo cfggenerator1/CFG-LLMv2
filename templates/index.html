@@ -4,173 +4,127 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Control Flow Graph Generator</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="static/css/style.css">
+    <style>
+        /* Additional styles for assistant messages */
+        .message.assistant .point-title {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0.25rem;
+            display: block;
+        }
+        
+        /* Loading spinner styles */
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-overlay {
+            background: rgba(255, 255, 255, 0.95);
+            font-weight: 500;
+            color: #1e293b;
+        }
+        
+        .loading-overlay > div:last-child {
+            margin-top: 0.5rem;
+        }
+    </style>
 </head>
 <body>
-    <header class="header">
+    <header>
         <h1>Control Flow Graph Generator</h1>
-        <p>Generate and modify control flow graphs with ease</p>
+        <div class="subtitle">Create precise and elegant flow diagrams</div>
     </header>
 
     <div class="container">
-        <!-- Input Section -->
-        <div class="card">
-            <form id="inputForm" class="input-container">
-                <textarea 
-                    id="userInput" 
-                    placeholder="Describe the control flow you want to generate..."
-                    required
-                ></textarea>
-                <div class="button-group">
-                    <button type="submit" class="button button-primary">
-                        Generate Graph
-                    </button>
-                    <button type="button" class="button button-secondary" onclick="clearHistory()">
-                        Clear History
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <!-- Loading Indicator -->
-        <div id="loading" class="loading">
-            <div class="loading-spinner"></div>
-            <p>Generating graph...</p>
-        </div>
-
-        <!-- Graph Output Section -->
-        <div class="card">
-            <div class="graph-container">
-                <div id="graphOutput"></div>
-                
-                <!-- Metrics Section -->
-                <div id="metricsOutput" class="metrics-container">
-                    <h3>Graph Metrics</h3>
-                    <div class="metrics-grid">
-                        <!-- Metrics will be inserted here -->
+        <!-- Chat Section -->
+        <section class="chat-section">
+            <div class="chat-container">
+                <div id="chatMessages" class="chat-messages"></div>
+                <div class="input-container">
+                    <textarea id="userInput" 
+                            placeholder="Describe the process or flow you want to visualize..."
+                            rows="3"></textarea>
+                    <div class="button-group">
+                        <button id="sendBtn" class="btn primary">
+                            <span class="btn-icon">➤</span> Generate
+                        </button>
+                        <button id="repairBtn" class="btn secondary">
+                            <span class="btn-icon">🔧</span> Refine
+                        </button>
+                        <button id="clearBtn" class="btn danger">
+                            <span class="btn-icon">↺</span> Reset
+                        </button>
                     </div>
                 </div>
             </div>
+        </section>
 
-            <!-- Feedback Section -->
-            <div id="feedbackContainer" class="feedback-container" style="display: none;">
-                <h3>Provide Feedback for Graph Repair</h3>
-                <div class="input-container">
-                    <textarea 
-                        id="feedbackInput" 
-                        placeholder="Describe what needs to be fixed or improved..."
-                    ></textarea>
+        <!-- Visualization Section -->
+        <section class="visualization-section">
+            <div class="graph-container">
+                <h2>Visualization</h2>
+                <div id="graphImage" class="graph-image-container"></div>
+                <div class="metrics-container">
+                    <div class="metrics-grid">
+                        <div class="metric-item">
+                            <div class="metric-label">Nodes</div>
+                            <div id="nodesMetric" class="metric-value">-</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Edges</div>
+                            <div id="edgesMetric" class="metric-value">-</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Cyclomatic Complexity</div>
+                            <div id="cyclomaticMetric" class="metric-value">-</div>
+                        </div>
+                    </div>
                 </div>
-                <button onclick="submitFeedback()" class="button button-primary">
-                    Submit Feedback
-                </button>
             </div>
-        </div>
-
-        <!-- Chat History Section -->
-        <div class="card">
-            <h3>Chat History</h3>
-            <div id="chatHistory" class="chat-history">
-                <!-- Chat messages will be inserted here -->
-            </div>
-        </div>
+        </section>
     </div>
 
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-spinner"></div>
+        <div>Generating graph...</div>
+    </div>
+
+    <script src="static/js/script.js"></script>
     <script>
-        function updateUI(data) {
-            // Hide loading indicator
-            $('#loading').hide();
+        // Update the formatMessage function in your JavaScript to handle point-wise formatting
+        function formatMessage(content) {
+            if (typeof content !== 'string') return content;
             
-            // Update graph image
-            if (data.cfg_image) {
-                $('#graphOutput').html(`<img src="data:image/png;base64,${data.cfg_image}" alt="Control Flow Graph">`);
-                $('#feedbackContainer').show();
-            }
-            
-            // Update metrics
-            if (data.metrics) {
-                let metricsHtml = '<div class="metrics-grid">';
-                for (const [key, value] of Object.entries(data.metrics)) {
-                    metricsHtml += `
-                        <div class="metric-item">
-                            <div class="metric-value">${value}</div>
-                            <div class="metric-label">${key}</div>
+            return content.split('\n').map(line => {
+                line = line.trim();
+                if (line.startsWith('•')) {
+                    // Extract the title part (if it exists)
+                    const parts = line.substring(1).split(':');
+                    if (parts.length > 1) {
+                        return `<div class="point">
+                            <span class="point-title">${parts[0].trim()}</span>
+                            ${parts[1].trim()}
                         </div>`;
+                    }
+                    return `<div class="point">${line}</div>`;
+                } else if (line.startsWith('-')) {
+                    return `<div class="sub-point">${line}</div>`;
                 }
-                metricsHtml += '</div>';
-                $('#metricsOutput').html(`<h3>Graph Metrics</h3>${metricsHtml}`);
-            }
-            
-            // Update chat history
-            if (data.chat_history) {
-                let chatHtml = '';
-                data.chat_history.forEach(chat => {
-                    const messageClass = chat.type === 'user' ? 'user-message' : 'assistant-message';
-                    chatHtml += `
-                        <div class="chat-message ${messageClass}">
-                            <strong>${chat.type}:</strong> ${chat.content}
-                        </div>`;
-                });
-                $('#chatHistory').html(chatHtml);
-            }
-        }
-
-        $('#inputForm').submit(function(e) {
-            e.preventDefault();
-            const userInput = $('#userInput').val();
-            
-            // Show loading indicator
-            $('#loading').show();
-            
-            $.ajax({
-                url: '/generate',
-                method: 'POST',
-                data: { user_input: userInput },
-                success: function(data) {
-                    updateUI(data);
-                    $('#userInput').val('');
-                },
-                error: function(xhr, status, error) {
-                    $('#loading').hide();
-                    alert('Error: ' + error);
-                }
-            });
-        });
-
-        function submitFeedback() {
-            const feedback = $('#feedbackInput').val();
-            
-            // Show loading indicator
-            $('#loading').show();
-            
-            $.ajax({
-                url: '/repair',
-                method: 'POST',
-                data: { feedback: feedback },
-                success: function(data) {
-                    updateUI(data);
-                    $('#feedbackInput').val('');
-                },
-                error: function(xhr, status, error) {
-                    $('#loading').hide();
-                    alert('Error: ' + error);
-                }
-            });
-        }
-
-        function clearHistory() {
-            $.ajax({
-                url: '/clear',
-                method: 'POST',
-                success: function() {
-                    location.reload();
-                },
-                error: function(xhr, status, error) {
-                    alert('Error: ' + error);
-                }
-            });
+                return `<div>${line}</div>`;
+            }).join('');
         }
     </script>
 </body>
