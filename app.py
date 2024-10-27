@@ -112,43 +112,70 @@ def extract_dot_code(response_text):
         return None
 
 def generate_graph_image(dot_code):
-    """Generate graph image with error handling"""
+    """Generate graph image with absolute path to dot"""
     try:
+        app.logger.info("Starting graph generation")
+        
+        # Try multiple possible paths for dot executable
+        dot_paths = [
+            '/usr/bin/dot',
+            '/usr/local/bin/dot',
+            '/bin/dot'
+        ]
+        
+        dot_path = None
+        for path in dot_paths:
+            if os.path.isfile(path):
+                dot_path = path
+                app.logger.info(f"Found dot at: {dot_path}")
+                break
+                
+        if not dot_path:
+            app.logger.error("Could not find dot executable")
+            return None
+            
         graph = pydot.graph_from_dot_data(dot_code)[0]
         
         # Set default graph attributes
         graph.set_rankdir('TB')
         graph.set_splines('ortho')
-        graph.set_size('"6,6!"')  # Reduced from 8,8 to 6,6
+        graph.set_size('"6,6!"')
         graph.set_ratio('compress')
-        graph.set_dpi('96')  # Explicit DPI setting
+        graph.set_dpi('96')
         
         # Set default node attributes
         graph.set_node_defaults(
             shape='box',
             style='rounded',
             fontname='Arial',
-            fontsize='6.5',  # Further reduced font size
-            width='0.6',    # Smaller node width
-            height='0.4',   # Smaller node height
-            margin='0.1,0.1'  # Reduced margins
+            fontsize='6.5',
+            width='0.6',
+            height='0.4',
+            margin='0.1,0.1'
         )
         
         # Set default edge attributes
         graph.set_edge_defaults(
             fontname='Arial',
-            fontsize='6',   # Smaller edge font
-            arrowsize='0.3' # Smaller arrows
+            fontsize='6',
+            arrowsize='0.3'
         )
         
-        # Generate PNG with higher resolution
-        png_string = graph.create_png(prog='dot')
+        # Use the found dot path explicitly
+        os.environ["PATH"] = f"{os.path.dirname(dot_path)}:{os.environ.get('PATH', '')}"
+        graph.set_prog(dot_path)
+        
+        png_string = graph.create_png()
+        if not png_string:
+            app.logger.error("Failed to create PNG - empty result")
+            return None
+            
         return base64.b64encode(png_string).decode('utf-8')
         
     except Exception as e:
         app.logger.error(f"Graph image generation error: {str(e)}")
+        app.logger.exception("Full traceback:")
         return None
-
 def calculate_metrics(dot_code):
     """Calculate graph metrics from DOT code"""
     try:
