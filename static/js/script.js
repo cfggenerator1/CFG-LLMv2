@@ -10,12 +10,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let isRepairMode = false;
 
+    const WELCOME_MESSAGE = `• Welcome to the Control Flow Graph Generator!
+
+• Key Features:
+  - Create detailed flow diagrams
+  - Get instant graph metrics
+  - Optimize process layouts
+  - Analyze flow complexity
+
+• How to Use:
+  - Type your process description
+  - Click Generate to create graph
+  - Use Refine for improvements
+
+• Try describing a simple process to start!`;
+
     // Initialize UI state
     function initializeUI() {
         userInput.focus();
         repairBtn.classList.remove('active');
         isRepairMode = false;
         updateMetrics({ metrics: null });
+        
+        // Check if chat messages is empty and add welcome message
+        if (chatMessages.children.length === 0) {
+            addMessage(WELCOME_MESSAGE, 'assistant');
+        }
     }
 
     // Format message content with proper bullet points
@@ -143,20 +163,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateMetrics({ metrics: null });
                 
                 // Add welcome message
-                addMessage(`• Welcome to the Control Flow Graph Generator!
-
-• Key Features:
-  - Create detailed flow diagrams
-  - Get instant graph metrics
-  - Optimize process layouts
-  - Analyze flow complexity
-
-• How to Use:
-  - Type your process description
-  - Click Generate to create graph
-  - Use Refine for improvements
-
-• Try describing a simple process to start!`, 'assistant');
+                addMessage(WELCOME_MESSAGE, 'assistant');
                 
                 initializeUI();
             }
