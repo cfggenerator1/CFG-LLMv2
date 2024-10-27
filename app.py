@@ -7,6 +7,8 @@ import pydot
 from dotenv import load_dotenv
 import openai
 from logging.handlers import RotatingFileHandler
+import subprocess
+import shutil
 
 load_dotenv()
 
@@ -37,141 +39,137 @@ file_handler.setFormatter(logging.Formatter(
 app.logger.addHandler(file_handler)
 app.logger.setLevel(logging.INFO)
 
-WELCOME_MESSAGE = """• Welcome to the Control Flow Graph Generator!
+# Print current environment for debugging
+app.logger.info(f"Current PATH: {os.environ.get('PATH', 'Not set')}")
+app.logger.info(f"Current working directory: {os.getcwd()}")
 
-• Key Features:
-  - Create detailed flow diagrams
-  - Get instant graph metrics
-  - Optimize process layouts
-  - Analyze flow complexity
-
-• How to Use:
-  - Type your process description
-  - Click Generate to create graph
-  - Use Refine for improvements
-
-• Try describing a simple process to start!"""
-
-def validate_dot_code(dot_code):
-    """Validate and fix common DOT code issues"""
-    if not dot_code:
-        return None
-        
+def verify_graphviz_installation():
+    """Verify Graphviz installation and log system information"""
     try:
-        # Remove any invalid characters
-        dot_code = ''.join(char for char in dot_code if char.isprintable())
-        
-        # Ensure proper digraph structure
-        if 'digraph' not in dot_code:
-            dot_code = f'digraph G {{\n{dot_code}\n}}'
-        
-        # Fix common syntax issues
-        dot_code = dot_code.replace('|', '"')
-        dot_code = dot_code.replace('""', '"')
-        dot_code = dot_code.replace('};};', '};')
-        
-        # Validate with pydot
-        test_graph = pydot.graph_from_dot_data(dot_code)
-        if not test_graph:
-            return None
-            
-        return dot_code
-    except Exception as e:
-        app.logger.error(f"DOT code validation error: {str(e)}")
-        return None
+        # Log all directories in PATH
+        path_dirs = os.environ.get('PATH', '').split(':')
+        app.logger.info("Searching in PATH directories:")
+        for directory in path_dirs:
+            app.logger.info(f"- {directory}")
+            if os.path.exists(directory):
+                files = os.listdir(directory)
+                app.logger.info(f"  Contents: {files}")
 
-def extract_dot_code(response_text):
-    """Extract and validate DOT code from response"""
-    try:
-        if "digraph" not in response_text:
-            return None
-            
-        start_idx = response_text.index("digraph")
-        content = response_text[start_idx:]
-        
-        brace_count = 0
-        end_idx = -1
-        
-        for i, char in enumerate(content):
-            if char == '{':
-                brace_count += 1
-            elif char == '}':
-                brace_count -= 1
-                if brace_count == 0:
-                    end_idx = i + 1
-                    break
-        
-        if end_idx == -1:
-            return None
-            
-        dot_code = content[:end_idx].strip()
-        return validate_dot_code(dot_code)
-        
+        # Try to find dot using which
+        try:
+            dot_path = subprocess.check_output(['which', 'dot'], text=True).strip()
+            app.logger.info(f"dot found at: {dot_path}")
+        except subprocess.SubprocessError:
+            app.logger.info("which dot command failed")
+
+        # Check if Graphviz is accessible
+        result = subprocess.run(['dot', '-V'], capture_output=True, text=True)
+        app.logger.info(f"Graphviz version: {result.stdout}")
+        return True
     except Exception as e:
-        app.logger.error(f"DOT code extraction error: {str(e)}")
-        return None
+        app.logger.error(f"Graphviz verification failed: {str(e)}")
+        return False
+
+def find_dot_executable():
+    """Find the dot executable using multiple methods"""
+    app.logger.info("Starting dot executable search")
+    
+    # First, verify Graphviz installation
+    verify_graphviz_installation()
+    
+    # Method 1: Use shutil.which
+    dot_path = shutil.which('dot')
+    if dot_path:
+        app.logger.info(f"Found dot using shutil.which: {dot_path}")
+        return dot_path
+
+    # Method 2: Check common paths
+    common_paths = [
+        '/usr/bin/dot',
+        '/usr/local/bin/dot',
+        '/bin/dot',
+        '/opt/render/project/src/.apt/usr/bin/dot',  # Render-specific path
+        os.path.join(os.getcwd(), '.apt/usr/bin/dot'),  # Alternative Render path
+        'dot'
+    ]
+    
+    for path in common_paths:
+        app.logger.info(f"Checking path: {path}")
+        if os.path.isfile(path):
+            app.logger.info(f"Found dot at: {path}")
+            try:
+                subprocess.run([path, '-V'], capture_output=True, check=True)
+                app.logger.info(f"Verified working dot at: {path}")
+                return path
+            except Exception as e:
+                app.logger.error(f"Path {path} exists but execution failed: {str(e)}")
+
+    # Method 3: Search in current directory and its parents
+    current_dir = os.getcwd()
+    while current_dir != '/':
+        dot_path = os.path.join(current_dir, '.apt/usr/bin/dot')
+        if os.path.isfile(dot_path):
+            app.logger.info(f"Found dot in parent directory: {dot_path}")
+            return dot_path
+        current_dir = os.path.dirname(current_dir)
+
+    app.logger.error("Could not find dot executable")
+    return 'dot'  # Return default as fallback
 
 def generate_graph_image(dot_code):
-    """Generate graph image with absolute path to dot"""
+    """Generate graph image with Render-specific handling"""
     try:
         app.logger.info("Starting graph generation")
         
-        # Try multiple possible paths for dot executable
-        dot_paths = [
-            '/usr/bin/dot',
-            '/usr/local/bin/dot',
-            '/bin/dot'
-        ]
+        # Find dot executable
+        dot_path = find_dot_executable()
+        app.logger.info(f"Using dot path: {dot_path}")
         
-        dot_path = None
-        for path in dot_paths:
-            if os.path.isfile(path):
-                dot_path = path
-                app.logger.info(f"Found dot at: {dot_path}")
-                break
+        # Update environment PATH
+        bin_dir = os.path.dirname(dot_path)
+        os.environ["PATH"] = f"{bin_dir}:{os.environ.get('PATH', '')}"
+        
+        # Try direct subprocess approach first
+        try:
+            app.logger.info("Attempting direct subprocess approach")
+            process = subprocess.Popen(
+                [dot_path, '-Tpng'],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            png_string, stderr = process.communicate(input=dot_code.encode())
+            if png_string:
+                app.logger.info("Successfully generated PNG using subprocess")
+                return base64.b64encode(png_string).decode('utf-8')
+            else:
+                app.logger.error(f"Subprocess PNG generation failed: {stderr.decode()}")
+        except Exception as e:
+            app.logger.error(f"Subprocess approach failed: {str(e)}")
+        
+        # Fallback to pydot approach
+        try:
+            app.logger.info("Attempting pydot approach")
+            pydot.dot_path = dot_path
+            graph = pydot.graph_from_dot_data(dot_code)[0]
+            
+            # Set graph attributes
+            graph.set_rankdir('TB')
+            graph.set_splines('ortho')
+            
+            # Generate PNG
+            png_string = graph.create_png()
+            if png_string:
+                app.logger.info("Successfully generated PNG using pydot")
+                return base64.b64encode(png_string).decode('utf-8')
+            else:
+                app.logger.error("Pydot generated empty PNG")
                 
-        if not dot_path:
-            app.logger.error("Could not find dot executable")
-            return None
+        except Exception as e:
+            app.logger.error(f"Pydot approach failed: {str(e)}")
+        
+        return None
             
-        graph = pydot.graph_from_dot_data(dot_code)[0]
-        
-        # Set default graph attributes
-        graph.set_rankdir('TB')
-        graph.set_splines('ortho')
-        graph.set_size('"6,6!"')
-        graph.set_ratio('compress')
-        graph.set_dpi('96')
-        
-        # Set default node attributes
-        graph.set_node_defaults(
-            shape='box',
-            style='rounded',
-            fontname='Arial',
-            fontsize='6.5',
-            width='0.6',
-            height='0.4',
-            margin='0.1,0.1'
-        )
-        
-        # Set default edge attributes
-        graph.set_edge_defaults(
-            fontname='Arial',
-            fontsize='6',
-            arrowsize='0.3'
-        )
-        
-        # Use the found dot path explicitly
-        os.environ["PATH"] = f"{os.path.dirname(dot_path)}:{os.environ.get('PATH', '')}"
-        graph.set_prog(dot_path)
-        
-        png_string = graph.create_png()
-        if not png_string:
-            app.logger.error("Failed to create PNG - empty result")
-            return None
-            
-        return base64.b64encode(png_string).decode('utf-8')
-        
     except Exception as e:
         app.logger.error(f"Graph image generation error: {str(e)}")
         app.logger.exception("Full traceback:")
