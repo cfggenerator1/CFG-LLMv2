@@ -13,7 +13,7 @@ body {
   min-height: 100vh;
 }
 
-/* Header styles - Optimized */
+/* Header styles */
 header {
   background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
   padding: 1.25rem 1rem;
@@ -35,7 +35,7 @@ h1 {
   font-weight: 400;
 }
 
-/* Layout - Optimized */
+/* Layout */
 .container {
   max-width: 1440px;
   margin: 0.75rem auto;
@@ -43,14 +43,13 @@ h1 {
   display: grid;
   grid-template-columns: 45% 55%;
   gap: 1.5rem;
-  height: calc(100vh - 7rem);
 }
 
-/* Chat section - Optimized */
+/* Chat section */
 .chat-section {
+  height: calc(100vh - 160px); /* Adjust based on your header/margins */
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
 
 .chat-container {
@@ -61,6 +60,7 @@ h1 {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
+  height: 100%; /* Take full height of parent */
 }
 
 .chat-messages {
@@ -70,6 +70,131 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  height: 0; /* This forces the container to scroll */
+  min-height: 0; /* Required for Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 3px;
+}
+
+/* Graph container modifications */
+  visualization-section {
+    height: calc(100vh - 160px); /* Same height as chat section */
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .graph-container {
+    background: #ffffff;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 1rem;
+    flex-grow: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  
+  .graph-image-container {
+    flex-grow: 1;
+    background: #f8fafc;
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    position: relative;
+    overflow: auto;
+    height: 0; /* Forces container to scroll */
+    min-height: 0; /* Required for Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+  
+  .graph-image-container::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .graph-image-container::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .graph-image-container::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 3px;
+  }
+  
+  .graph-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100%;
+    min-width: 100%;
+    transform-origin: center center;
+  }
+  
+  .graph-content img {
+    max-width: 100%;
+    height: auto;
+    transition: transform 0.2s ease;
+  }
+
+/* Zoom controls */
+.zoom-controls {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  background: white;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.zoom-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  transition: background-color 0.2s ease;
+}
+
+.zoom-btn:hover {
+  background: #2563eb;
+}
+
+.zoom-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.zoom-level {
+  margin: 0 0.75rem;
+  min-width: 4rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #1e293b;
+  font-weight: 500;
 }
 
 /* Message styles - Optimized */
@@ -123,6 +248,7 @@ h1 {
   background: #ffffff;
 }
 
+
 textarea {
   width: 100%;
   padding: 0.75rem;
@@ -133,6 +259,7 @@ textarea {
   transition: all 0.2s ease;
   font-family: inherit;
   min-height: 60px;
+  max-height: 150px;
   margin-bottom: 0.5rem;
 }
 
@@ -318,7 +445,7 @@ h2 {
 
   .chat-section,
   .visualization-section {
-    height: 500px;
+    height: calc(50vh - 80px); /* Adjust height for mobile */
   }
 }
 
