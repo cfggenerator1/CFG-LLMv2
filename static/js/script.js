@@ -10,32 +10,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let isRepairMode = false;
 
-    const WELCOME_MESSAGE = `• Welcome to the Control Flow Graph Generator!
-
-• Key Features:
-  - Create detailed flow diagrams
-  - Get instant graph metrics
-  - Optimize process layouts
-  - Analyze flow complexity
-
-• How to Use:
-  - Type your process description
-  - Click Generate to create graph
-  - Use Refine for improvements
-
-• Try describing a simple process to start!`;
-
     // Initialize UI state
     function initializeUI() {
         userInput.focus();
         repairBtn.classList.remove('active');
         isRepairMode = false;
         updateMetrics({ metrics: null });
-        
-        // Check if chat messages is empty and add welcome message
-        if (chatMessages.children.length === 0) {
-            addMessage(WELCOME_MESSAGE, 'assistant');
-        }
     }
 
     // Format message content with proper bullet points
@@ -51,6 +31,101 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }).join('');
     }
+
+    // Initialize graph container and zoom controls
+    const graphContent = document.createElement('div');
+    graphContent.className = 'graph-content';
+    graphImage.appendChild(graphContent);
+
+    const zoomControls = document.createElement('div');
+    zoomControls.className = 'zoom-controls';
+    zoomControls.innerHTML = `
+        <button class="zoom-btn" id="zoomOut">-</button>
+        <div class="zoom-level" id="zoomLevel">100%</div>
+        <button class="zoom-btn" id="zoomIn">+</button>
+    `;
+    graphImage.appendChild(zoomControls);
+
+    // Zoom functionality
+    let currentZoom = 1;
+    const zoomStep = 0.1;
+    const minZoom = 0.5;
+    const maxZoom = 3;
+
+    const zoomIn = document.getElementById('zoomIn');
+    const zoomOut = document.getElementById('zoomOut');
+    const zoomLevel = document.getElementById('zoomLevel');
+
+    function updateZoom() {
+        const image = graphContent.querySelector('img');
+        if (image) {
+            image.style.transform = `scale(${currentZoom})`;
+            zoomLevel.textContent = `${Math.round(currentZoom * 100)}%`;
+            
+            // Update zoom buttons state
+            zoomIn.disabled = currentZoom >= maxZoom;
+            zoomOut.disabled = currentZoom <= minZoom;
+        }
+    }
+
+    zoomIn.addEventListener('click', () => {
+        if (currentZoom < maxZoom) {
+            currentZoom = Math.min(currentZoom + zoomStep, maxZoom);
+            updateZoom();
+        }
+    });
+
+    zoomOut.addEventListener('click', () => {
+        if (currentZoom > minZoom) {
+            currentZoom = Math.max(currentZoom - zoomStep, minZoom);
+            updateZoom();
+        }
+    });
+
+    // Override graph update logic
+    Object.defineProperty(graphImage, 'innerHTML', {
+        set: function(content) {
+            if (content.includes('<img')) {
+                graphContent.innerHTML = content;
+                currentZoom = 1;
+                updateZoom();
+            } else {
+                graphContent.innerHTML = content;
+            }
+        },
+        get: function() {
+            return graphContent.innerHTML;
+        }
+    });
+
+    // Add keyboard shortcuts for zooming
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === '=' || e.key === '+') {
+                e.preventDefault();
+                zoomIn.click();
+            } else if (e.key === '-') {
+                e.preventDefault();
+                zoomOut.click();
+            }
+        }
+    });
+
+    // Add mouse wheel zoom support
+    graphImage.addEventListener('wheel', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            const delta = e.deltaY || e.detail || e.wheelDelta;
+            
+            if (delta < 0 && currentZoom < maxZoom) {
+                currentZoom = Math.min(currentZoom + zoomStep, maxZoom);
+            } else if (delta > 0 && currentZoom > minZoom) {
+                currentZoom = Math.max(currentZoom - zoomStep, minZoom);
+            }
+            
+            updateZoom();
+        }
+    });
 
     // Add message to chat
     function addMessage(content, type) {
@@ -163,7 +238,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateMetrics({ metrics: null });
                 
                 // Add welcome message
-                addMessage(WELCOME_MESSAGE, 'assistant');
+                addMessage(`• Welcome to the Control Flow Graph Generator!
+
+• Key Features:
+  - Create detailed flow diagrams
+  - Get instant graph metrics
+  - Optimize process layouts
+  - Analyze flow complexity
+
+• How to Use:
+  - Type your process description
+  - Click Generate to create graph
+  - Use Refine for improvements
+
+• Try describing a simple process to start!`, 'assistant');
                 
                 initializeUI();
             }
