@@ -4,4 +4,4 @@ networkx
 pydot
 python-dotenv
 gunicorn
-graphviz
+graphviz==0.18.2
